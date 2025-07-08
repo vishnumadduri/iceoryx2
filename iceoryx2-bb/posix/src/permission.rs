@@ -41,6 +41,8 @@ impl Permission {
     pub const OTHERS_EXEC: Self = Self(0o0001);
     pub const OTHERS_ALL: Self = Self(0o0007);
 
+    pub const ALL_READ: Self = Self(0o0444);
+    pub const ALL_RW: Self = Self(0o0666);
     pub const ALL: Self = Self(0o0777);
 
     pub const SET_UID: Self = Self(0o4000);

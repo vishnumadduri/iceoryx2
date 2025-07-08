@@ -56,7 +56,10 @@ use iceoryx2_bb_posix::{
 };
 use iceoryx2_pal_concurrency_sync::iox_atomic::IoxAtomicBool;
 
+#[cfg(not(feature = "dev_permissions"))]
 const FINAL_PERMISSIONS: Permission = Permission::OWNER_READ;
+#[cfg(feature = "dev_permissions")]
+const FINAL_PERMISSIONS: Permission = Permission::ALL_READ;
 
 /// The custom configuration of the [`Storage`].
 #[derive(Clone, Debug)]
