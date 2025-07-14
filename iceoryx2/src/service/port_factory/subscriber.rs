@@ -47,6 +47,9 @@ use super::publish_subscribe::PortFactory;
 pub(crate) struct SubscriberConfig {
     pub(crate) buffer_size: Option<usize>,
     pub(crate) degradation_callback: Option<DegradationCallback<'static>>,
+    pub(crate) owner_uid: Option<u32>,
+    pub(crate) group_gid: Option<u32>,
+    pub(crate) mode: Option<u16>,
 }
 
 /// Factory to create a new [`Subscriber`] port/endpoint for
@@ -87,6 +90,9 @@ impl<
             config: SubscriberConfig {
                 buffer_size: self.config.buffer_size,
                 degradation_callback: None,
+                owner_uid: self.config.owner_uid,
+                group_gid: self.config.group_gid,
+                mode: self.config.mode,
             },
             factory: self.factory,
         }
@@ -97,6 +103,9 @@ impl<
             config: SubscriberConfig {
                 buffer_size: None,
                 degradation_callback: None,
+                owner_uid: None,
+                group_gid: None,
+                mode: None,
             },
             factory,
         }
@@ -122,6 +131,30 @@ impl<
             None => self.config.degradation_callback = None,
         }
 
+        self
+    }
+
+    /// Sets the owner user ID for the [`Subscriber`]. If not set, defaults to the current process UID.
+    pub fn owner_uid(mut self, uid: u32) -> Self {
+        self.config.owner_uid = Some(uid);
+        self
+    }
+
+    /// Sets the group ID for the [`Subscriber`]. If not set, defaults to the current process GID.
+    pub fn group_gid(mut self, gid: u32) -> Self {
+        self.config.group_gid = Some(gid);
+        self
+    }
+
+    /// Sets the POSIX permission mode for the [`Subscriber`]. If not set, defaults to 0o640 (rw-r-----).
+    pub fn mode(mut self, mode: u16) -> Self {
+        self.config.mode = Some(mode);
+        self
+    }
+
+    /// Sets the POSIX permission for the [`Subscriber`]. If not set, defaults to 0o640 (rw-r-----).
+    pub fn permission(mut self, permission: iceoryx2_bb_posix::permission::Permission) -> Self {
+        self.config.mode = Some(permission.bits() as u16);
         self
     }
 

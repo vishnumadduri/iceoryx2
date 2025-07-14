@@ -47,6 +47,7 @@ use iceoryx2_bb_elementary_traits::zero_copy_send::ZeroCopySend;
 use iceoryx2_bb_lock_free::mpmc::container::{ContainerHandle, ContainerState};
 use iceoryx2_bb_log::{fail, warn};
 use iceoryx2_bb_posix::unique_system_id::UniqueSystemId;
+use iceoryx2_bb_posix::user::User;
 use iceoryx2_cal::arc_sync_policy::ArcSyncPolicy;
 use iceoryx2_cal::dynamic_storage::DynamicStorage;
 use iceoryx2_cal::zero_copy_connection::ChannelId;
@@ -238,6 +239,25 @@ impl<
 
         core::sync::atomic::compiler_fence(Ordering::SeqCst);
 
+        // Get permission settings, defaulting to current process UID/GID and mode 0o640
+        let current_user = User::from_self().unwrap_or_else(|_| {
+            warn!(from new_self, "Unable to get current user, using UID 0");
+            User::from_uid(iceoryx2_bb_posix::user::Uid::new(0).unwrap()).unwrap_or_else(|_| {
+                panic!("Unable to create fallback user with UID 0");
+            })
+        });
+        
+        let owner_uid = config.owner_uid.unwrap_or(current_user.uid().value());
+        let group_gid = config.group_gid.unwrap_or_else(|| {
+            current_user.details()
+                .map(|d| d.gid().value())
+                .unwrap_or_else(|| {
+                    warn!(from new_self, "Unable to get current user's GID, using GID 0");
+                    0
+                })
+        });
+        let mode = config.mode.unwrap_or(0o640); // rw-r-----
+
         // !MUST! be the last task otherwise a subscriber is added to the dynamic config without
         // the creation of all required channels
         let dynamic_subscriber_handle = match service
@@ -249,6 +269,9 @@ impl<
                 subscriber_id,
                 buffer_size,
                 node_id: *service.__internal_state().shared_node.id(),
+                owner_uid,
+                group_gid,
+                mode,
             }) {
             Some(unique_index) => unique_index,
             None => {
