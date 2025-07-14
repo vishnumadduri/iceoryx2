@@ -115,6 +115,8 @@ pub enum SendError {
     LoanError(LoanError),
     /// A failure occurred while establishing a connection to the ports counterpart port.
     ConnectionError(ConnectionFailure),
+    /// The current process does not have permission to send data to this publisher.
+    PermissionDenied,
 }
 
 impl From<LoanError> for SendError {
@@ -148,6 +150,9 @@ pub enum ReceiveError {
 
     /// Occurs when a receiver is unable to connect to a corresponding sender.
     ConnectionFailure(ConnectionFailure),
+
+    /// The current process does not have permission to receive data from this subscriber.
+    PermissionDenied,
 }
 
 impl From<ConnectionFailure> for ReceiveError {

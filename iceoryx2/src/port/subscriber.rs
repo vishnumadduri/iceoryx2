@@ -39,6 +39,52 @@ use core::sync::atomic::Ordering;
 
 extern crate alloc;
 
+/// Helper function to convert mode bits to Permission flags
+fn mode_to_permission(mode: u16) -> iceoryx2_bb_posix::permission::Permission {
+    use iceoryx2_bb_posix::permission::Permission;
+    let mut p = Permission::none();
+    if mode & 0o400 != 0 { p |= Permission::OWNER_READ; }
+    if mode & 0o200 != 0 { p |= Permission::OWNER_WRITE; }
+    if mode & 0o100 != 0 { p |= Permission::OWNER_EXEC; }
+    if mode & 0o040 != 0 { p |= Permission::GROUP_READ; }
+    if mode & 0o020 != 0 { p |= Permission::GROUP_WRITE; }
+    if mode & 0o010 != 0 { p |= Permission::GROUP_EXEC; }
+    if mode & 0o004 != 0 { p |= Permission::OTHERS_READ; }
+    if mode & 0o002 != 0 { p |= Permission::OTHERS_WRITE; }
+    if mode & 0o001 != 0 { p |= Permission::OTHERS_EXEC; }
+    p
+}
+
+/// Check if the current process has read permission
+fn check_read_permission(owner_uid: u32, group_gid: u32, mode: u16) -> bool {
+    use iceoryx2_bb_posix::permission::Permission;
+    
+    let current_user = match User::from_self() {
+        Ok(user) => user,
+        Err(_) => return false, // Deny access if we can't determine current user
+    };
+    
+    let current_uid = current_user.uid().value();
+    let current_gid = current_user.details()
+        .map(|d| d.gid().value())
+        .unwrap_or(0);
+    
+    let permissions = mode_to_permission(mode);
+    
+    // Check owner permissions
+    if current_uid == owner_uid {
+        return permissions.has(Permission::OWNER_READ);
+    }
+    
+    // Check group permissions
+    if current_gid == group_gid {
+        return permissions.has(Permission::GROUP_READ);
+    }
+    
+    // Check others permissions
+    permissions.has(Permission::OTHERS_READ)
+}
+
 use iceoryx2_bb_container::slotmap::SlotMap;
 use iceoryx2_bb_container::vec::Vec;
 use iceoryx2_bb_elementary::cyclic_tagger::CyclicTagger;
@@ -95,6 +141,10 @@ impl core::error::Error for SubscriberCreateError {}
 pub(crate) struct SubscriberSharedState<Service: service::Service> {
     pub(crate) receiver: Receiver<Service>,
     pub(crate) publisher_list_state: UnsafeCell<ContainerState<PublisherDetails>>,
+    // Permission fields for access control
+    owner_uid: u32,
+    group_gid: u32,
+    mode: u16,
 }
 
 /// The receiving endpoint of a publish-subscribe communication.
@@ -196,6 +246,25 @@ impl<
         let number_of_connections =
             number_of_to_be_removed_connections + number_of_active_connections;
 
+        // Get permission settings, defaulting to current process UID/GID and mode 0o640
+        let current_user = User::from_self().unwrap_or_else(|_| {
+            warn!(from origin, "Unable to get current user, using UID 0");
+            User::from_uid(iceoryx2_bb_posix::user::Uid::new(0).unwrap()).unwrap_or_else(|_| {
+                panic!("Unable to create fallback user with UID 0");
+            })
+        });
+        
+        let owner_uid = config.owner_uid.unwrap_or(current_user.uid().value());
+        let group_gid = config.group_gid.unwrap_or_else(|| {
+            current_user.details()
+                .map(|d| d.gid().value())
+                .unwrap_or_else(|| {
+                    warn!(from origin, "Unable to get current user's GID, using GID 0");
+                    0
+                })
+        });
+        let mode = config.mode.unwrap_or(0o640); // rw-r-----
+
         let subscriber_shared_state = Service::ArcThreadSafetyPolicy::new(SubscriberSharedState {
             publisher_list_state: UnsafeCell::new(unsafe { publisher_list.get_state() }),
             receiver: Receiver {
@@ -214,6 +283,9 @@ impl<
                 number_of_channels: 1,
                 connection_storage: UnsafeCell::new(SlotMap::new(number_of_connections)),
             },
+            owner_uid,
+            group_gid,
+            mode,
         });
 
         let subscriber_shared_state = match subscriber_shared_state {
@@ -238,25 +310,6 @@ impl<
         }
 
         core::sync::atomic::compiler_fence(Ordering::SeqCst);
-
-        // Get permission settings, defaulting to current process UID/GID and mode 0o640
-        let current_user = User::from_self().unwrap_or_else(|_| {
-            warn!(from new_self, "Unable to get current user, using UID 0");
-            User::from_uid(iceoryx2_bb_posix::user::Uid::new(0).unwrap()).unwrap_or_else(|_| {
-                panic!("Unable to create fallback user with UID 0");
-            })
-        });
-        
-        let owner_uid = config.owner_uid.unwrap_or(current_user.uid().value());
-        let group_gid = config.group_gid.unwrap_or_else(|| {
-            current_user.details()
-                .map(|d| d.gid().value())
-                .unwrap_or_else(|| {
-                    warn!(from new_self, "Unable to get current user's GID, using GID 0");
-                    0
-                })
-        });
-        let mode = config.mode.unwrap_or(0o640); // rw-r-----
 
         // !MUST! be the last task otherwise a subscriber is added to the dynamic config without
         // the creation of all required channels
@@ -348,11 +401,18 @@ impl<
     }
 
     fn receive_impl(&self) -> Result<Option<(ChunkDetails, Chunk)>, ReceiveError> {
+        let subscriber_shared_state = self.subscriber_shared_state.lock();
+        
+        // Check read permission
+        if !check_read_permission(subscriber_shared_state.owner_uid, subscriber_shared_state.group_gid, subscriber_shared_state.mode) {
+            fail!(from self, with ReceiveError::PermissionDenied,
+                "Unable to receive sample since the current process does not have read permission.");
+        }
+        
         fail!(from self, when self.update_connections(),
                 "Some samples are not being received since not all connections to publishers could be established.");
 
-        self.subscriber_shared_state
-            .lock()
+        subscriber_shared_state
             .receiver
             .receive(ChannelId::new(0))
     }
