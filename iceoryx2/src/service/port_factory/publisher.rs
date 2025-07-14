@@ -77,6 +77,9 @@ pub(crate) struct LocalPublisherConfig {
     pub(crate) degradation_callback: Option<DegradationCallback<'static>>,
     pub(crate) initial_max_slice_len: usize,
     pub(crate) allocation_strategy: AllocationStrategy,
+    pub(crate) owner_uid: Option<u32>,
+    pub(crate) group_gid: Option<u32>,
+    pub(crate) mode: Option<u16>,
 }
 
 /// Factory to create a new [`Publisher`] port/endpoint for
@@ -119,6 +122,9 @@ impl<
                 degradation_callback: None,
                 initial_max_slice_len: self.config.initial_max_slice_len,
                 allocation_strategy: self.config.allocation_strategy,
+                owner_uid: self.config.owner_uid,
+                group_gid: self.config.group_gid,
+                mode: self.config.mode,
             },
             factory: self.factory,
         }
@@ -154,6 +160,9 @@ impl<
                     .defaults
                     .publish_subscribe
                     .unable_to_deliver_strategy,
+                owner_uid: None,
+                group_gid: None,
+                mode: None,
             },
             factory,
         }
@@ -187,6 +196,30 @@ impl<
             None => self.config.degradation_callback = None,
         }
 
+        self
+    }
+
+    /// Sets the owner user ID for the [`Publisher`]. If not set, defaults to the current process UID.
+    pub fn owner_uid(mut self, uid: u32) -> Self {
+        self.config.owner_uid = Some(uid);
+        self
+    }
+
+    /// Sets the group ID for the [`Publisher`]. If not set, defaults to the current process GID.
+    pub fn group_gid(mut self, gid: u32) -> Self {
+        self.config.group_gid = Some(gid);
+        self
+    }
+
+    /// Sets the POSIX permission mode for the [`Publisher`]. If not set, defaults to 0o640 (rw-r-----).
+    pub fn mode(mut self, mode: u16) -> Self {
+        self.config.mode = Some(mode);
+        self
+    }
+
+    /// Sets the POSIX permission for the [`Publisher`]. If not set, defaults to 0o640 (rw-r-----).
+    pub fn permission(mut self, permission: iceoryx2_bb_posix::permission::Permission) -> Self {
+        self.config.mode = Some(permission.bits() as u16);
         self
     }
 

@@ -38,8 +38,23 @@ use crate::{
         port_identifiers::{UniquePortId, UniquePublisherId, UniqueSubscriberId},
     },
 };
+use iceoryx2_bb_posix::permission::Permission;
 
 use super::PortCleanupAction;
+
+fn mode_to_permission(mode: u16) -> Permission {
+    let mut p = Permission::none();
+    if mode & 0o400 != 0 { p |= Permission::OWNER_READ; }
+    if mode & 0o200 != 0 { p |= Permission::OWNER_WRITE; }
+    if mode & 0o100 != 0 { p |= Permission::OWNER_EXEC; }
+    if mode & 0o040 != 0 { p |= Permission::GROUP_READ; }
+    if mode & 0o020 != 0 { p |= Permission::GROUP_WRITE; }
+    if mode & 0o010 != 0 { p |= Permission::GROUP_EXEC; }
+    if mode & 0o004 != 0 { p |= Permission::OTHERS_READ; }
+    if mode & 0o002 != 0 { p |= Permission::OTHERS_WRITE; }
+    if mode & 0o001 != 0 { p |= Permission::OTHERS_EXEC; }
+    p
+}
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -70,6 +85,54 @@ pub struct PublisherDetails {
     /// [`DataSegmentType::Dynamic`] it defines how many segment the
     /// [`Publisher`](crate::port::publisher::Publisher) can have at most.
     pub max_number_of_segments: u8,
+    /// The user ID of the owner of the [`Publisher`](crate::port::publisher::Publisher).
+    pub owner_uid: u32,
+    /// The group ID of the [`Publisher`](crate::port::publisher::Publisher).
+    pub group_gid: u32,
+    /// The POSIX permission mode bits of the [`Publisher`](crate::port::publisher::Publisher).
+    pub mode: u16,
+}
+
+impl PublisherDetails {
+    /// Returns the owner user ID of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn owner_uid(&self) -> u32 {
+        self.owner_uid
+    }
+
+    /// Returns the group ID of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn group_gid(&self) -> u32 {
+        self.group_gid
+    }
+
+    /// Returns the POSIX permission mode of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn mode(&self) -> u16 {
+        self.mode
+    }
+
+    /// Returns the POSIX permission as a [`Permission`] object.
+    pub fn permission(&self) -> Permission {
+        mode_to_permission(self.mode)
+    }
+
+    /// Sets the owner user ID of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn set_owner_uid(&mut self, uid: u32) {
+        self.owner_uid = uid;
+    }
+
+    /// Sets the group ID of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn set_group_gid(&mut self, gid: u32) {
+        self.group_gid = gid;
+    }
+
+    /// Sets the POSIX permission mode of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn set_mode(&mut self, mode: u16) {
+        self.mode = mode;
+    }
+
+    /// Sets the POSIX permission of the [`Publisher`](crate::port::publisher::Publisher).
+    pub fn set_permission(&mut self, permission: Permission) {
+        self.mode = permission.bits() as u16;
+    }
 }
 
 /// Contains the communication settings of the connected
@@ -84,6 +147,54 @@ pub struct SubscriberDetails {
     pub node_id: NodeId,
     /// The size of the receive buffer that stores [`Sample`](crate::sample::Sample).
     pub buffer_size: usize,
+    /// The user ID of the owner of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub owner_uid: u32,
+    /// The group ID of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub group_gid: u32,
+    /// The POSIX permission mode bits of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub mode: u16,
+}
+
+impl SubscriberDetails {
+    /// Returns the owner user ID of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn owner_uid(&self) -> u32 {
+        self.owner_uid
+    }
+
+    /// Returns the group ID of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn group_gid(&self) -> u32 {
+        self.group_gid
+    }
+
+    /// Returns the POSIX permission mode of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn mode(&self) -> u16 {
+        self.mode
+    }
+
+    /// Returns the POSIX permission as a [`Permission`] object.
+    pub fn permission(&self) -> Permission {
+        mode_to_permission(self.mode)
+    }
+
+    /// Sets the owner user ID of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn set_owner_uid(&mut self, uid: u32) {
+        self.owner_uid = uid;
+    }
+
+    /// Sets the group ID of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn set_group_gid(&mut self, gid: u32) {
+        self.group_gid = gid;
+    }
+
+    /// Sets the POSIX permission mode of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn set_mode(&mut self, mode: u16) {
+        self.mode = mode;
+    }
+
+    /// Sets the POSIX permission of the [`Subscriber`](crate::port::subscriber::Subscriber).
+    pub fn set_permission(&mut self, permission: Permission) {
+        self.mode = permission.bits() as u16;
+    }
 }
 
 /// The dynamic configuration of an

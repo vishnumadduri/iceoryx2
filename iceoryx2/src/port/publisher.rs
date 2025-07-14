@@ -131,6 +131,8 @@ use iceoryx2_bb_elementary_traits::zero_copy_send::ZeroCopySend;
 use iceoryx2_bb_lock_free::mpmc::container::{ContainerHandle, ContainerState};
 use iceoryx2_bb_log::{fail, warn};
 use iceoryx2_bb_posix::unique_system_id::UniqueSystemId;
+use iceoryx2_bb_posix::user::User;
+use iceoryx2_bb_posix::permission::Permission;
 use iceoryx2_cal::arc_sync_policy::ArcSyncPolicy;
 use iceoryx2_cal::dynamic_storage::DynamicStorage;
 use iceoryx2_cal::shm_allocator::{AllocationStrategy, PointerOffset};
@@ -140,6 +142,49 @@ use iceoryx2_cal::zero_copy_connection::{
 use iceoryx2_pal_concurrency_sync::iox_atomic::{IoxAtomicBool, IoxAtomicUsize};
 
 extern crate alloc;
+
+/// Helper function to convert mode bits to Permission flags
+fn mode_to_permission(mode: u16) -> Permission {
+    let mut p = Permission::none();
+    if mode & 0o400 != 0 { p |= Permission::OWNER_READ; }
+    if mode & 0o200 != 0 { p |= Permission::OWNER_WRITE; }
+    if mode & 0o100 != 0 { p |= Permission::OWNER_EXEC; }
+    if mode & 0o040 != 0 { p |= Permission::GROUP_READ; }
+    if mode & 0o020 != 0 { p |= Permission::GROUP_WRITE; }
+    if mode & 0o010 != 0 { p |= Permission::GROUP_EXEC; }
+    if mode & 0o004 != 0 { p |= Permission::OTHERS_READ; }
+    if mode & 0o002 != 0 { p |= Permission::OTHERS_WRITE; }
+    if mode & 0o001 != 0 { p |= Permission::OTHERS_EXEC; }
+    p
+}
+
+/// Check if the current process has write permission
+fn check_write_permission(owner_uid: u32, group_gid: u32, mode: u16) -> bool {
+    let current_user = match User::from_self() {
+        Ok(user) => user,
+        Err(_) => return false, // Deny access if we can't determine current user
+    };
+    
+    let current_uid = current_user.uid().value();
+    let current_gid = current_user.details()
+        .map(|d| d.gid().value())
+        .unwrap_or(0);
+    
+    let permissions = mode_to_permission(mode);
+    
+    // Check owner permissions
+    if current_uid == owner_uid {
+        return permissions.has(Permission::OWNER_WRITE);
+    }
+    
+    // Check group permissions
+    if current_gid == group_gid {
+        return permissions.has(Permission::GROUP_WRITE);
+    }
+    
+    // Check others permissions
+    permissions.has(Permission::OTHERS_WRITE)
+}
 
 /// Defines a failure that can occur when a [`Publisher`] is created with
 /// [`crate::service::port_factory::publisher::PortFactoryPublisher`].
@@ -178,6 +223,10 @@ pub(crate) struct PublisherSharedState<Service: service::Service> {
     subscriber_list_state: UnsafeCell<ContainerState<SubscriberDetails>>,
     history: Option<UnsafeCell<Queue<OffsetAndSize>>>,
     is_active: IoxAtomicBool,
+    // Permission fields for access control
+    owner_uid: u32,
+    group_gid: u32,
+    mode: u16,
 }
 
 impl<Service: service::Service> PublisherSharedState<Service> {
@@ -283,6 +332,13 @@ impl<Service: service::Service> PublisherSharedState<Service> {
         sample_size: usize,
     ) -> Result<usize, SendError> {
         let msg = "Unable to send sample";
+        
+        // Check write permission
+        if !check_write_permission(self.owner_uid, self.group_gid, self.mode) {
+            fail!(from self, with SendError::PermissionDenied,
+                "{} since the current process does not have write permission.", msg);
+        }
+        
         if !self.is_active.load(Ordering::Relaxed) {
             fail!(from self, with SendError::ConnectionBrokenSinceSenderNoLongerExists,
                 "{} since the corresponding publisher is already disconnected.", msg);
@@ -392,6 +448,26 @@ impl<
         let max_slice_len = config.initial_max_slice_len;
         let max_number_of_segments =
             DataSegment::<Service>::max_number_of_segments(data_segment_type);
+
+        // Get permission settings, defaulting to current process UID/GID and mode 0o640
+        let current_user = User::from_self().unwrap_or_else(|_| {
+            warn!(from "Publisher::new", "Unable to get current user, using UID 0");
+            User::from_uid(iceoryx2_bb_posix::user::Uid::new(0).unwrap()).unwrap_or_else(|_| {
+                panic!("Unable to create fallback user with UID 0");
+            })
+        });
+        
+        let owner_uid = config.owner_uid.unwrap_or(current_user.uid().value());
+        let group_gid = config.group_gid.unwrap_or_else(|| {
+            current_user.details()
+                .map(|d| d.gid().value())
+                .unwrap_or_else(|| {
+                    warn!(from "Publisher::new", "Unable to get current user's GID, using GID 0");
+                    0
+                })
+        });
+        let mode = config.mode.unwrap_or(0o640); // rw-r-----
+
         let publisher_details = PublisherDetails {
             data_segment_type,
             publisher_id: port_id,
@@ -399,6 +475,9 @@ impl<
             max_slice_len,
             node_id: *service.__internal_state().shared_node.id(),
             max_number_of_segments,
+            owner_uid,
+            group_gid,
+            mode,
         };
         let global_config = service.__internal_state().shared_node.config();
 
@@ -462,6 +541,9 @@ impl<
                     true => None,
                     false => Some(UnsafeCell::new(Queue::new(static_config.history_size))),
                 },
+                owner_uid,
+                group_gid,
+                mode,
             });
 
         let publisher_shared_state = match publisher_shared_state {
