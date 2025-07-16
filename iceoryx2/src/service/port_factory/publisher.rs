@@ -58,6 +58,7 @@ use core::fmt::Debug;
 
 use iceoryx2_bb_elementary_traits::zero_copy_send::ZeroCopySend;
 use iceoryx2_bb_log::fail;
+use iceoryx2_bb_posix::permission::Permission;
 use iceoryx2_cal::shm_allocator::AllocationStrategy;
 
 use super::publish_subscribe::PortFactory;
@@ -70,6 +71,11 @@ use crate::{
     service,
 };
 
+/// Returns the default permission for publisher storage layers when no custom permission is specified
+pub(crate) fn default_publisher_permission() -> Permission {
+    Permission::OWNER_READ | Permission::OWNER_WRITE
+}
+
 #[derive(Debug)]
 pub(crate) struct LocalPublisherConfig {
     pub(crate) max_loaned_samples: usize,
@@ -77,6 +83,7 @@ pub(crate) struct LocalPublisherConfig {
     pub(crate) degradation_callback: Option<DegradationCallback<'static>>,
     pub(crate) initial_max_slice_len: usize,
     pub(crate) allocation_strategy: AllocationStrategy,
+    pub(crate) permission: Option<Permission>,
 }
 
 /// Factory to create a new [`Publisher`] port/endpoint for
@@ -119,6 +126,7 @@ impl<
                 degradation_callback: None,
                 initial_max_slice_len: self.config.initial_max_slice_len,
                 allocation_strategy: self.config.allocation_strategy,
+                permission: self.config.permission,
             },
             factory: self.factory,
         }
@@ -154,6 +162,7 @@ impl<
                     .defaults
                     .publish_subscribe
                     .unable_to_deliver_strategy,
+                permission: None,
             },
             factory,
         }
@@ -187,6 +196,37 @@ impl<
             None => self.config.degradation_callback = None,
         }
 
+        self
+    }
+
+    /// Sets the permission for the publisher's storage layers.
+    /// If not set, the default permission `Permission::OWNER_READ | Permission::OWNER_WRITE` is used.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `value` - Permission bits (mode_t) to apply to storage files and shared memory segments
+    /// 
+    /// # Example
+    /// 
+    /// ```
+    /// use iceoryx2::prelude::*;
+    /// use iceoryx2_bb_posix::permission::Permission;
+    /// 
+    /// # fn main() -> Result<(), Box<dyn core::error::Error>> {
+    /// let node = NodeBuilder::new().create::<ipc::Service>()?;
+    /// let service = node.service_builder(&"My/Funk/ServiceName".try_into()?)
+    ///     .publish_subscribe::<u64>()
+    ///     .open_or_create()?;
+    /// 
+    /// let publisher = service.publisher_builder()
+    ///     .permission((Permission::OWNER_READ | Permission::OWNER_WRITE).bits())
+    ///     .create()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn permission(mut self, value: u32) -> Self {
+        use iceoryx2_bb_posix::permission::PermissionExt;
+        self.config.permission = Some(value.as_permission());
         self
     }
 

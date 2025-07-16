@@ -385,6 +385,7 @@ impl<
                 sample_layout,
                 global_config,
                 number_of_requests,
+                None, // Use default permission
             ),
             DataSegmentType::Dynamic => DataSegment::<Service>::create_dynamic_segment(
                 &segment_name,
@@ -392,6 +393,7 @@ impl<
                 global_config,
                 number_of_requests,
                 client_factory.config.allocation_strategy,
+                None, // Use default permission
             ),
         };
 

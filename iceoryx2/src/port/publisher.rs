@@ -409,6 +409,7 @@ impl<
                 sample_layout,
                 global_config,
                 number_of_samples,
+                config.permission,
             ),
             DataSegmentType::Dynamic => DataSegment::create_dynamic_segment(
                 &segment_name,
@@ -416,6 +417,7 @@ impl<
                 global_config,
                 number_of_samples,
                 config.allocation_strategy,
+                config.permission,
             ),
         };
 

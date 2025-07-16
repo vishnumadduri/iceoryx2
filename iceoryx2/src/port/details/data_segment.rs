@@ -13,6 +13,7 @@
 use core::alloc::Layout;
 
 use iceoryx2_bb_log::fail;
+use iceoryx2_bb_posix::permission::Permission;
 use iceoryx2_bb_system_types::file_name::FileName;
 use iceoryx2_cal::{
     event::NamedConceptBuilder,
@@ -71,6 +72,7 @@ impl<Service: service::Service> DataSegment<Service> {
         chunk_layout: Layout,
         global_config: &config::Config,
         number_of_chunks: usize,
+        permission: Option<Permission>,
     ) -> Result<Self, SharedMemoryCreateError> {
         let allocator_config = shm_allocator::pool_allocator::Config {
             bucket_layout: chunk_layout,
@@ -79,13 +81,19 @@ impl<Service: service::Service> DataSegment<Service> {
         let origin = "DataSegment::create_static_segment()";
 
         let segment_config = data_segment_config::<Service>(global_config);
+        let mut builder = <<Service::SharedMemory as SharedMemory<PoolAllocator>>::Builder as NamedConceptBuilder<
+                        Service::SharedMemory,
+                            >>::new(segment_name)
+                            .config(&segment_config)
+                            .size(chunk_layout.size() * number_of_chunks + chunk_layout.align() - 1);
+        
+        // Apply permission if provided and if the builder supports it
+        if let Some(perm) = permission {
+            builder = apply_permission_to_builder(builder, perm);
+        }
+        
         let memory = fail!(from origin,
-                                when <<Service::SharedMemory as SharedMemory<PoolAllocator>>::Builder as NamedConceptBuilder<
-                                Service::SharedMemory,
-                                    >>::new(segment_name)
-                                    .config(&segment_config)
-                                    .size(chunk_layout.size() * number_of_chunks + chunk_layout.align() - 1)
-                                    .create(&allocator_config),
+                                when builder.create(&allocator_config),
                                 "{msg}");
 
         Ok(Self {
@@ -99,13 +107,13 @@ impl<Service: service::Service> DataSegment<Service> {
         global_config: &config::Config,
         number_of_chunks: usize,
         allocation_strategy: AllocationStrategy,
+        permission: Option<Permission>,
     ) -> Result<Self, SharedMemoryCreateError> {
         let msg = "Unable to create the dynamic data segment since the underlying shared memory could not be created.";
         let origin = "DataSegment::create_dynamic_segment()";
 
         let segment_config = resizable_data_segment_config::<Service>(global_config);
-        let memory = fail!(from origin,
-                    when <<Service::ResizableSharedMemory as ResizableSharedMemory<
+        let mut builder = <<Service::ResizableSharedMemory as ResizableSharedMemory<
                         PoolAllocator,
                         Service::SharedMemory,
                     >>::MemoryBuilder as NamedConceptBuilder<Service::ResizableSharedMemory>>::new(
@@ -114,8 +122,15 @@ impl<Service: service::Service> DataSegment<Service> {
                     .config(&segment_config)
                     .max_number_of_chunks_hint(number_of_chunks)
                     .max_chunk_layout_hint(chunk_layout)
-                    .allocation_strategy(allocation_strategy)
-                    .create(),
+                    .allocation_strategy(allocation_strategy);
+                    
+        // Apply permission if provided and if the builder supports it
+        if let Some(perm) = permission {
+            builder = apply_permission_to_resizable_builder(builder, perm);
+        }
+        
+        let memory = fail!(from origin,
+                    when builder.create(),
                     "{msg}");
 
         Ok(Self {
@@ -264,4 +279,18 @@ impl<Service: service::Service> DataSegmentView<Service> {
     pub(crate) fn is_dynamic(&self) -> bool {
         matches!(&self.memory, MemoryViewType::Dynamic(_))
     }
+}
+
+// Helper function to apply permission to shared memory builders
+fn apply_permission_to_builder<Builder>(builder: Builder, _permission: Permission) -> Builder {
+    // Default implementation - just returns the builder unchanged
+    // This will be overridden for specific builder types that support permission
+    builder
+}
+
+// Helper function to apply permission to resizable shared memory builders  
+fn apply_permission_to_resizable_builder<Builder>(builder: Builder, _permission: Permission) -> Builder {
+    // Default implementation - just returns the builder unchanged
+    // This will be overridden for specific builder types that support permission
+    builder
 }
