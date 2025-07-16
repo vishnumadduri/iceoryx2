@@ -71,8 +71,10 @@ use crate::{
     service,
 };
 
-/// Default permission for publisher storage layers when no custom permission is specified
-pub(crate) const DEFAULT_PUBLISHER_PERMISSION: Permission = Permission::OWNER_READ.bitor(Permission::OWNER_WRITE);
+/// Returns the default permission for publisher storage layers when no custom permission is specified
+pub(crate) fn default_publisher_permission() -> Permission {
+    Permission::OWNER_READ | Permission::OWNER_WRITE
+}
 
 #[derive(Debug)]
 pub(crate) struct LocalPublisherConfig {
