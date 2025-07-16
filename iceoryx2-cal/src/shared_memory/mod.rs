@@ -127,7 +127,9 @@ pub trait SharedMemoryBuilder<Allocator: ShmAllocator, Shm: SharedMemory<Allocat
 
     /// Sets the permission for the shared memory segment. May be ignored by implementations
     /// that don't support permission setting.
-    fn permission(self, value: iceoryx2_bb_posix::permission::Permission) -> Self {
+    fn permission(self, _value: iceoryx2_bb_posix::permission::Permission) -> Self 
+    where Self: Sized 
+    {
         // Default implementation that does nothing for compatibility
         self
     }

@@ -129,6 +129,7 @@ impl<Service: service::Service> DataSegment<Service> {
                     .max_number_of_chunks_hint(number_of_chunks)
                     .max_chunk_layout_hint(chunk_layout)
                     .allocation_strategy(allocation_strategy)
+                    .permission(final_permission)
                     .create(),
                     "{msg}");
 

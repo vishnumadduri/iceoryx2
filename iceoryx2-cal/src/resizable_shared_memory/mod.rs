@@ -163,6 +163,15 @@ pub trait ResizableSharedMemoryBuilder<
     /// acquired.
     fn allocation_strategy(self, value: AllocationStrategy) -> Self;
 
+    /// Sets the permission for the shared memory segments. May be ignored by implementations
+    /// that don't support permission setting.
+    fn permission(self, _value: iceoryx2_bb_posix::permission::Permission) -> Self
+    where Self: Sized 
+    {
+        // Default implementation that does nothing for compatibility
+        self
+    }
+
     /// Creates new [`SharedMemory`]. If it already exists the method will fail.
     fn create(self) -> Result<ResizableShm, SharedMemoryCreateError>;
 }
