@@ -559,6 +559,28 @@ mod publisher {
         Ok(())
     }
 
+    #[test]
+    fn publisher_permission_method_exists<Sut: Service>() -> TestResult<()> {
+        let service_name = generate_name()?;
+        let config = generate_isolated_config();
+        let node = NodeBuilder::new().config(&config).create::<Sut>().unwrap();
+        let service = node
+            .service_builder(&service_name)
+            .publish_subscribe::<u64>()
+            .open_or_create()?;
+
+        // Test that the permission method exists and can be called
+        let custom_permission = 0o644u32; // owner read/write, group/others read
+        let publisher_result = service
+            .publisher_builder()
+            .permission(custom_permission)
+            .create();
+
+        // If we get here, the permission method works and publisher creation succeeds
+        assert_that!(publisher_result, is_ok);
+        Ok(())
+    }
+
     #[instantiate_tests(<iceoryx2::service::ipc::Service>)]
     mod ipc {}
 

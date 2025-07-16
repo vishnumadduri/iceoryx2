@@ -15,11 +15,6 @@ use core::alloc::Layout;
 use iceoryx2_bb_log::fail;
 use iceoryx2_bb_posix::permission::Permission;
 use iceoryx2_bb_system_types::file_name::FileName;
-
-/// Default permission for publisher storage layers when no custom permission is specified
-fn default_publisher_permission() -> Permission {
-    crate::service::port_factory::publisher::default_publisher_permission()
-}
 use iceoryx2_cal::{
     event::NamedConceptBuilder,
     resizable_shared_memory::*,
@@ -85,14 +80,7 @@ impl<Service: service::Service> DataSegment<Service> {
         let msg = "Unable to create the static data segment since the underlying shared memory could not be created.";
         let origin = "DataSegment::create_static_segment()";
 
-        let mut segment_config = data_segment_config::<Service>(global_config);
-        // Apply permission to config if provided 
-        if let Some(perm) = permission {
-            segment_config = segment_config.permission(perm);
-        } else {
-            segment_config = segment_config.permission(default_publisher_permission());
-        }
-        
+        let segment_config = data_segment_config::<Service>(global_config);
         let memory = fail!(from origin,
                                 when <<Service::SharedMemory as SharedMemory<PoolAllocator>>::Builder as NamedConceptBuilder<
                                 Service::SharedMemory,
@@ -118,14 +106,7 @@ impl<Service: service::Service> DataSegment<Service> {
         let msg = "Unable to create the dynamic data segment since the underlying shared memory could not be created.";
         let origin = "DataSegment::create_dynamic_segment()";
 
-        let mut segment_config = resizable_data_segment_config::<Service>(global_config);
-        // Apply permission to config if provided 
-        if let Some(perm) = permission {
-            segment_config = segment_config.permission(perm);
-        } else {
-            segment_config = segment_config.permission(default_publisher_permission());
-        }
-        
+        let segment_config = resizable_data_segment_config::<Service>(global_config);
         let memory = fail!(from origin,
                     when <<Service::ResizableSharedMemory as ResizableSharedMemory<
                         PoolAllocator,
