@@ -15,6 +15,12 @@ use core::alloc::Layout;
 use iceoryx2_bb_log::fail;
 use iceoryx2_bb_posix::permission::Permission;
 use iceoryx2_bb_system_types::file_name::FileName;
+
+#[cfg(not(feature = "dev_permissions"))]
+const FINAL_PERMISSIONS: Permission = Permission::OWNER_ALL;
+
+#[cfg(feature = "dev_permissions")]
+const FINAL_PERMISSIONS: Permission = Permission::ALL;
 use iceoryx2_cal::{
     event::NamedConceptBuilder,
     resizable_shared_memory::*,
@@ -81,12 +87,15 @@ impl<Service: service::Service> DataSegment<Service> {
         let origin = "DataSegment::create_static_segment()";
 
         let segment_config = data_segment_config::<Service>(global_config);
+        let final_permission = permission.unwrap_or(FINAL_PERMISSIONS);
+        
         let memory = fail!(from origin,
                                 when <<Service::SharedMemory as SharedMemory<PoolAllocator>>::Builder as NamedConceptBuilder<
                                 Service::SharedMemory,
                                     >>::new(segment_name)
                                     .config(&segment_config)
                                     .size(chunk_layout.size() * number_of_chunks + chunk_layout.align() - 1)
+                                    .permission(final_permission)
                                     .create(&allocator_config),
                                 "{msg}");
 
@@ -107,6 +116,8 @@ impl<Service: service::Service> DataSegment<Service> {
         let origin = "DataSegment::create_dynamic_segment()";
 
         let segment_config = resizable_data_segment_config::<Service>(global_config);
+        let final_permission = permission.unwrap_or(FINAL_PERMISSIONS);
+        
         let memory = fail!(from origin,
                     when <<Service::ResizableSharedMemory as ResizableSharedMemory<
                         PoolAllocator,
@@ -118,6 +129,7 @@ impl<Service: service::Service> DataSegment<Service> {
                     .max_number_of_chunks_hint(number_of_chunks)
                     .max_chunk_layout_hint(chunk_layout)
                     .allocation_strategy(allocation_strategy)
+                    .permission(final_permission)
                     .create(),
                     "{msg}");
 

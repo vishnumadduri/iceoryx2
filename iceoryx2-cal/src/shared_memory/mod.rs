@@ -125,6 +125,15 @@ pub trait SharedMemoryBuilder<Allocator: ShmAllocator, Shm: SharedMemory<Allocat
     /// timeout.
     fn timeout(self, value: Duration) -> Self;
 
+    /// Sets the permission for the shared memory segment. May be ignored by implementations
+    /// that don't support permission setting.
+    fn permission(self, _value: iceoryx2_bb_posix::permission::Permission) -> Self 
+    where Self: Sized 
+    {
+        // Default implementation that does nothing for compatibility
+        self
+    }
+
     /// Creates new [`SharedMemory`]. If it already exists the method will fail.
     fn create(
         self,
