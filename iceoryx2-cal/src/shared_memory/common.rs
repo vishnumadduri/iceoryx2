@@ -130,6 +130,23 @@ pub mod details {
         }
     }
 
+    impl<Allocator: ShmAllocator + Debug, Storage: DynamicStorage<AllocatorDetails<Allocator>>>
+        Configuration<Allocator, Storage>
+    where 
+        Storage::Configuration: PermissionConfigurable,
+    {
+        /// Sets the permission for the shared memory (if supported by the underlying storage)
+        pub fn permission(mut self, value: iceoryx2_bb_posix::permission::Permission) -> Self {
+            self.dynamic_storage_config = self.dynamic_storage_config.permission(value);
+            self
+        }
+    }
+
+    /// Trait for storage configurations that support setting permissions
+    pub trait PermissionConfigurable {
+        fn permission(self, value: iceoryx2_bb_posix::permission::Permission) -> Self;
+    }
+
     #[derive(Debug)]
     pub struct Builder<
         Allocator: ShmAllocator + Debug,

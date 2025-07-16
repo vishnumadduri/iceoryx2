@@ -66,6 +66,49 @@ pub(crate) fn data_segment_config<Service: crate::service::Service>(
         .path_hint(global_config.global.root_path())
 }
 
+// Create a configuration with permission for the specific case of IPC services
+pub(crate) fn create_data_segment_config_with_permission<Service: crate::service::Service>(
+    global_config: &config::Config,
+    permission: iceoryx2_bb_posix::permission::Permission,
+) -> <Service::SharedMemory as NamedConceptMgmt>::Configuration {
+    create_ipc_data_segment_config_with_permission(global_config, permission)
+}
+
+pub(crate) fn create_resizable_data_segment_config_with_permission<Service: crate::service::Service>(
+    global_config: &config::Config,
+    permission: iceoryx2_bb_posix::permission::Permission,
+) -> <Service::ResizableSharedMemory as NamedConceptMgmt>::Configuration {
+    create_ipc_resizable_data_segment_config_with_permission(global_config, permission)
+}
+
+// Implementation for IPC shared memory configuration
+use iceoryx2_cal::shared_memory::common::details::{Configuration as ShmConfiguration, AllocatorDetails};
+use iceoryx2_cal::dynamic_storage::posix_shared_memory::{Storage as PosixStorage};
+use iceoryx2_cal::shm_allocator::pool_allocator::PoolAllocator;
+
+fn create_ipc_data_segment_config_with_permission<T>(
+    global_config: &config::Config,
+    permission: iceoryx2_bb_posix::permission::Permission,
+) -> T {
+    // Create the configuration for IPC shared memory with permission
+    let config = ShmConfiguration::<PoolAllocator, PosixStorage<AllocatorDetails<PoolAllocator>>>::default()
+        .prefix(&global_config.global.prefix)
+        .suffix(&global_config.global.service.data_segment_suffix)
+        .path_hint(global_config.global.root_path())
+        .permission(permission);
+    
+    // Safety: For IPC services, T is always the same type as our config
+    unsafe { std::mem::transmute_copy(&config) }
+}
+
+fn create_ipc_resizable_data_segment_config_with_permission<T>(
+    global_config: &config::Config,
+    permission: iceoryx2_bb_posix::permission::Permission,
+) -> T {
+    // For resizable shared memory, use the same configuration as static shared memory
+    create_ipc_data_segment_config_with_permission(global_config, permission)
+}
+
 pub(crate) fn resizable_data_segment_config<Service: crate::service::Service>(
     global_config: &config::Config,
 ) -> <Service::ResizableSharedMemory as NamedConceptMgmt>::Configuration {

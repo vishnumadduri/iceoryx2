@@ -32,7 +32,7 @@ use crate::{
     config,
     service::{
         self,
-        config_scheme::{data_segment_config, resizable_data_segment_config},
+        config_scheme::{data_segment_config, resizable_data_segment_config, create_data_segment_config_with_permission, create_resizable_data_segment_config_with_permission},
     },
 };
 
@@ -80,7 +80,12 @@ impl<Service: service::Service> DataSegment<Service> {
         let msg = "Unable to create the static data segment since the underlying shared memory could not be created.";
         let origin = "DataSegment::create_static_segment()";
 
-        let segment_config = data_segment_config::<Service>(global_config);
+        let segment_config = if let Some(perm) = permission {
+            create_data_segment_config_with_permission::<Service>(global_config, perm)
+        } else {
+            data_segment_config::<Service>(global_config)
+        };
+        
         let memory = fail!(from origin,
                                 when <<Service::SharedMemory as SharedMemory<PoolAllocator>>::Builder as NamedConceptBuilder<
                                 Service::SharedMemory,
@@ -106,7 +111,12 @@ impl<Service: service::Service> DataSegment<Service> {
         let msg = "Unable to create the dynamic data segment since the underlying shared memory could not be created.";
         let origin = "DataSegment::create_dynamic_segment()";
 
-        let segment_config = resizable_data_segment_config::<Service>(global_config);
+        let segment_config = if let Some(perm) = permission {
+            create_resizable_data_segment_config_with_permission::<Service>(global_config, perm)
+        } else {
+            resizable_data_segment_config::<Service>(global_config)
+        };
+        
         let memory = fail!(from origin,
                     when <<Service::ResizableSharedMemory as ResizableSharedMemory<
                         PoolAllocator,

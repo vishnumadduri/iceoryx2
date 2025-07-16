@@ -167,6 +167,12 @@ impl<T: Send + Sync + Debug> Configuration<T> {
     }
 }
 
+impl<T: Send + Sync + Debug> crate::shared_memory::common::details::PermissionConfigurable for Configuration<T> {
+    fn permission(self, value: iceoryx2_bb_posix::permission::Permission) -> Self {
+        Configuration::permission(self, value)
+    }
+}
+
 impl<T: Send + Sync + Debug> NamedConceptBuilder<Storage<T>> for Builder<'_, T> {
     fn new(storage_name: &FileName) -> Self {
         Self {
