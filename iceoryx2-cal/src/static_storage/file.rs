@@ -64,6 +64,7 @@ pub struct Configuration {
     path: Path,
     suffix: FileName,
     prefix: FileName,
+    permission: Option<Permission>,
 }
 
 impl Default for Configuration {
@@ -72,6 +73,7 @@ impl Default for Configuration {
             path: Storage::default_path_hint(),
             suffix: Storage::default_suffix(),
             prefix: Storage::default_prefix(),
+            permission: None,
         }
     }
 }
@@ -102,6 +104,14 @@ impl crate::named_concept::NamedConceptConfiguration for Configuration {
 
     fn get_path_hint(&self) -> &Path {
         &self.path
+    }
+}
+
+impl Configuration {
+    /// Sets the permission for created files
+    pub fn permission(mut self, value: Permission) -> Self {
+        self.permission = Some(value);
+        self
     }
 }
 
@@ -401,7 +411,7 @@ impl crate::static_storage::StaticStorageBuilder<Storage> for Builder {
         let file = fail!(from self, when
             FileBuilder::new(&self.config.path_for(&self.storage_name))
             .creation_mode(CreationMode::CreateExclusive)
-            .permission(Permission::OWNER_ALL)
+            .permission(self.config.permission.unwrap_or(Permission::OWNER_ALL))
             .create(),
             map FileCreationError::FileAlreadyExists => StaticStorageCreateError::AlreadyExists;
                 FileCreationError::InsufficientPermissions => StaticStorageCreateError::InsufficientPermissions,
