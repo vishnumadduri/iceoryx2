@@ -31,6 +31,7 @@ use crate::service::port_factory::publish_subscribe;
 use crate::service::static_config::messaging_pattern::MessagingPattern;
 use crate::service::*;
 use crate::service::{self, dynamic_config::MessagingPatternSettings};
+use crate::transport::Transport;
 
 use super::{CustomHeaderMarker, CustomPayloadMarker, OpenDynamicStorageFailure, ServiceState};
 
@@ -80,6 +81,9 @@ pub enum PublishSubscribeOpenError {
     /// When the call creation call is repeated with a little delay the [`Service`] should be
     /// recreatable.
     IsMarkedForDestruction,
+    /// The existing service was created with a different [`Transport`](crate::config::Transport)
+    /// than the one requested.
+    IncompatibleTransport,
 }
 
 impl core::fmt::Display for PublishSubscribeOpenError {
@@ -132,6 +136,9 @@ pub enum PublishSubscribeCreateError {
     /// The [`Service`]s creation timeout has passed and it is still not initialized. Can be caused
     /// by a process that crashed during [`Service`] creation.
     HangsInCreation,
+    /// The selected [`Transport`](crate::config::Transport) is not supported on this platform or
+    /// requires a feature that has not been compiled in.
+    TransportNotSupported,
 }
 
 impl core::fmt::Display for PublishSubscribeCreateError {
@@ -406,6 +413,18 @@ impl<
         self
     }
 
+    /// Sets the [`Transport`] backend for this service.
+    ///
+    /// Both publisher and subscriber must use the same transport; a mismatch
+    /// causes service opening to fail with
+    /// [`PublishSubscribeOpenError::IncompatibleTransport`].
+    ///
+    /// The default transport is [`Transport::SharedMemory`].
+    pub fn transport(mut self, value: Transport) -> Self {
+        self.config_details_mut().transport = value;
+        self
+    }
+
     /// Validates configuration and overrides the invalid setting with meaningful values.
     fn adjust_configuration_to_meaningful_values(&mut self) {
         let origin = format!("{self:?}");
@@ -521,6 +540,12 @@ impl<
                                 msg, existing_settings.max_nodes, required_settings.max_nodes);
         }
 
+        if existing_settings.transport != required_settings.transport {
+            fail!(from self, with PublishSubscribeOpenError::IncompatibleTransport,
+                "{} since the service was created with transport {:?} but transport {:?} was requested.",
+                msg, existing_settings.transport, required_settings.transport);
+        }
+
         Ok(*existing_settings)
     }
 
@@ -541,6 +566,12 @@ impl<
         {
             fail!(from self, with PublishSubscribeCreateError::SubscriberBufferMustBeLargerThanHistorySize,
                 "{} since the history size is greater than the subscriber buffer size. The subscriber buffer size must be always greater or equal to the history size in the non-overflowing setup.", msg);
+        }
+
+        if !Transport::is_supported(self.config_details().transport) {
+            fail!(from self, with PublishSubscribeCreateError::TransportNotSupported,
+                "{} since the transport {:?} is not supported on this platform or requires a feature that has not been compiled in.",
+                msg, self.config_details().transport);
         }
 
         match self.is_service_available(msg)? {

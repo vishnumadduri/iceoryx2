@@ -245,6 +245,12 @@ pub mod local_threadsafe;
 /// A configuration when communicating between different processes using posix mechanisms.
 pub mod ipc;
 
+/// `dma-buf` backed inter-process communication.  Requires Linux and the `dma-buf` Cargo feature.
+/// The service type re-uses the same IPC machinery as [`ipc`] but tags services with the
+/// [`Transport::DmaBuf`](crate::transport::Transport::DmaBuf) transport identifier, preventing
+/// endpoints with mismatched transports from connecting.
+pub mod dma_buf;
+
 /// A threadsafe configuration when communicating between different processes using posix mechanisms.
 /// All [`Service`] ports implement [`Send`] and [`Sync`], the payload constructs will implement
 /// [`Send`] but at the cost of an additional internal mutex.

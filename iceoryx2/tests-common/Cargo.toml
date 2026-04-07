@@ -25,6 +25,7 @@ std = [
   "iceoryx2-bb-testing/std",
   "iceoryx2-bb-testing-macros/std",
 ]
+dma-buf = ["iceoryx2/dma-buf"]
 
 [dependencies]
 iceoryx2 = { workspace = true }

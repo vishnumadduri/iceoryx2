@@ -35,6 +35,7 @@
 
 use super::message_type_details::MessageTypeDetails;
 use crate::config;
+use crate::transport::Transport;
 use iceoryx2_bb_derive_macros::ZeroCopySend;
 use iceoryx2_bb_elementary_traits::zero_copy_send::ZeroCopySend;
 use serde::{Deserialize, Serialize};
@@ -54,6 +55,7 @@ pub struct StaticConfig {
     pub(crate) subscriber_max_borrowed_samples: usize,
     pub(crate) enable_safe_overflow: bool,
     pub(crate) message_type_details: MessageTypeDetails,
+    pub(crate) transport: Transport,
 }
 
 impl StaticConfig {
@@ -73,6 +75,7 @@ impl StaticConfig {
                 .subscriber_max_borrowed_samples,
             enable_safe_overflow: config.defaults.publish_subscribe.enable_safe_overflow,
             message_type_details: MessageTypeDetails::default(),
+            transport: config.defaults.publish_subscribe.transport,
         }
     }
 
@@ -129,5 +132,10 @@ impl StaticConfig {
     /// Returns the type details of the [`crate::service::Service`].
     pub fn message_type_details(&self) -> &MessageTypeDetails {
         &self.message_type_details
+    }
+
+    /// Returns the [`Transport`] backend used by this service.
+    pub fn transport(&self) -> Transport {
+        self.transport
     }
 }

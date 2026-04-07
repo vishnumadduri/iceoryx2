@@ -88,6 +88,7 @@ use serde::{Deserialize, Serialize};
 use iceoryx2_log::{debug, fail, fatal_panic, info, trace, warn};
 
 use crate::port::unable_to_deliver_strategy::UnableToDeliverStrategy;
+pub use crate::transport::Transport;
 
 use iceoryx2_pal_configuration::ICEORYX2_ROOT_PATH;
 
@@ -313,6 +314,9 @@ pub struct PublishSubscribe {
     /// disconnected from a service and the connection
     /// still contains unconsumed [`Sample`](crate::sample::Sample)s.
     pub subscriber_expired_connection_buffer: usize,
+    /// Selects the IPC backend used for the data segment.
+    /// Defaults to [`Transport::SharedMemory`].
+    pub transport: Transport,
 }
 
 impl Default for PublishSubscribe {
@@ -328,6 +332,7 @@ impl Default for PublishSubscribe {
             enable_safe_overflow: true,
             unable_to_deliver_strategy: UnableToDeliverStrategy::Block,
             subscriber_expired_connection_buffer: 128,
+            transport: Transport::default(),
         }
     }
 }
