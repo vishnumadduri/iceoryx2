@@ -34,6 +34,11 @@ std = [
 # with inconsistent user configuration.
 dev_permissions = ["iceoryx2-cal/dev_permissions"]
 
+# Enable the dma-buf transport backend.  Currently supported on Linux only.
+# When disabled (the default), selecting Transport::DmaBuf at runtime will return
+# PublishSubscribeCreateError::TransportNotSupported.
+dma-buf = []
+
 [dependencies]
 iceoryx2-log = { workspace = true }
 iceoryx2-cal = { workspace = true }

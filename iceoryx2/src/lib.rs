@@ -515,6 +515,9 @@ pub mod constants;
 /// Handles iceoryx2s global configuration
 pub mod config;
 
+/// Defines the [`Transport`](transport::Transport) type used to select the IPC backend
+pub mod transport;
+
 /// Central instance that owns all service entities and can handle incoming event in an event loop
 pub mod node;
 
