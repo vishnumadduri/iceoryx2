@@ -25,6 +25,7 @@
     * [User Documentation](#user-documentation)
     * [Contributor Documentation](#contributor-documentation)
     * [API References](#api-references)
+* [Transport Selection](#transport-selection)
 * [Supported Platforms](#supported-platforms)
 * [Language Bindings](#language-bindings)
 * [Commercial Support](#commercial-support)
@@ -99,6 +100,7 @@ if you want to have a chat with the developers of iceoryx.
 * [Examples](examples)
 * [Release Notes](doc/release-notes)
 * [User FAQ](FAQ.md)
+* [Transport Selection (dma-buf)](#transport-selection)
 
 ### Contributor Documentation
 
@@ -110,6 +112,62 @@ if you want to have a chat with the developers of iceoryx.
 * [Python API Reference](https://eclipse-iceoryx.github.io/iceoryx2/python/latest/)
 * [C++ API Reference](https://eclipse-iceoryx.github.io/iceoryx2/cxx/latest/)
 * [C API Reference](https://eclipse-iceoryx.github.io/iceoryx2/c/latest/)
+
+## Transport Selection
+
+iceoryx2 supports multiple IPC backends (transports).  Both publisher and
+subscriber of the same service **must** use the same transport; a mismatch is
+detected during service discovery and reported as a clear error.
+
+### Available Transports
+
+| Transport | Availability | Cargo feature |
+| :-------- | :----------- | :------------ |
+| `SharedMemory` (default) | All platforms | *(always on)* |
+| `DmaBuf` | Linux only | `dma-buf` |
+
+### Selecting a Transport
+
+```rust
+use iceoryx2::prelude::*;
+use iceoryx2::config::Transport;
+
+// Use the default shared-memory transport (backward compatible)
+let service = node
+    .service_builder(&"My/Service".try_into()?)
+    .publish_subscribe::<u64>()
+    // .transport(Transport::SharedMemory)  // this is the default
+    .open_or_create()?;
+
+// Explicitly select the dma-buf transport (Linux + --features dma-buf)
+let service = node
+    .service_builder(&"My/DmaBuf/Service".try_into()?)
+    .publish_subscribe::<u64>()
+    .transport(Transport::DmaBuf)
+    .open_or_create()?;
+```
+
+### Enabling the `dma-buf` Feature
+
+```toml
+# Cargo.toml
+[dependencies]
+iceoryx2 = { version = "*", features = ["dma-buf"] }
+```
+
+Or on the command line:
+
+```sh
+cargo build --features iceoryx2/dma-buf
+cargo test  --features iceoryx2/dma-buf
+```
+
+### Requirements for `dma-buf`
+
+* Linux kernel (the feature is a no-op and returns an error on other platforms).
+* The `dma-buf` Cargo feature must be enabled at compile time.
+* If the feature is disabled (the default), selecting `Transport::DmaBuf` at
+  runtime returns `PublishSubscribeCreateError::TransportNotSupported`.
 
 ## Supported Platforms
 
